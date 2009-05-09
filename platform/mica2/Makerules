@@ -1,0 +1,123 @@
+# -*- Makefile -*-
+#
+# Makerules for Kernel image for Mica2 platform
+#
+
+#DEFS += -DMICA2_PLATFORM -DNO_SOS_I2C
+
+DEFS += -DMICA2_PLATFORM
+
+# if the node is being compiled to be used with cyclops, 
+# then its I2C drivers should also be enabled
+#ifndef USE_SOS_I2C
+#DEFS += -DNO_SOS_I2C
+#endif
+
+
+PROCESSOR = avr
+
+VPATH += $(ROOTDIR)/platform/$(PLATFORM)
+#VPATH += $(ROOTDIR)/drivers/uart
+#VPATH += $(ROOTDIR)/drivers/i2c
+
+INCDIR += -I$(ROOTDIR)/platform/$(PLATFORM)/include
+#INCDIR += -I$(ROOTDIR)/drivers/uart/include
+#INCDIR += -I$(ROOTDIR)/drivers/i2c/include
+
+#ifeq ($(BUILD),_SOS_KERNEL_)
+#SRCS +=  cc1k.c cc1k_cnt.c exflash.c led.c radio_spi.c sos_uart.c sos_uart_mgr.c sos_i2c.c sos_i2c_mgr.c
+SRCS += leds.c
+
+#ifeq  ($(RADIOSTACK), ubmac)
+#SRCS += rats.c linear.c ubmac.c cc1k_ubmac.c
+#INCDIR += -I$(ROOTDIR)/drivers/ubmac/include
+
+LDFLAGS += -lm
+
+#VPATH += $(ROOTDIR)/modules/timesync/rats
+#VPATH += $(ROOTDIR)/drivers/ubmac
+
+#DEFS += -DUBMAC
+
+#else
+#SRCS += cc1k_radio.c
+#endif
+
+
+# TODO: This may need te be move out of CVS (Roy)
+#INCDIR += -I$(ROOTDIR)/drivers/one_wire/include
+#VPATH += $(ROOTDIR)/drivers/one_wire
+#VPATH += $(ROOTDIR)/drivers/one_wire/ds2438
+#SRCS += one_wire.c
+
+#endif
+
+include $(ROOTDIR)/arch/$(PROCESSOR)/Makerules
+
+ifneq ($(UISP),)
+UISP_PROG = $(UISP)
+else 
+UISP_PROG = uisp
+endif
+
+####
+# Programer configuration
+#   dapa  | mib510 | stk500 | avarice | vorata (not yet supported)
+#   specify PORT if you want serial programming
+#   specify IP address if you are using ethernet programming
+####
+ifndef PROG
+PROG=dapa
+endif
+INSTALLER_PORG = -dprog=$(PROG)
+
+# TODO: fix this to handle alternative parallel ports
+#PORT=
+ifneq ($(PORT),)
+INSTALLER_PORT = -dserial=$(PORT)
+endif
+
+#IP=
+#ifneq ($(IP),)
+#INSTALLER_PORT = -dhost=$(IP)
+#endif
+
+INSTALLER_PART = -dpart=$(MCU)
+
+ifeq ($(PROG),jtag)
+INSTALLER = avarice 
+else
+INSTALLER = $(UISP_PROG) $(INSTALLER_PART) $(INSTALLER_PORG) $(INSTALLER_PORT)
+endif
+
+
+#######
+# Make rules
+#######
+
+mica2_install: $(PROJ).srec
+#	$(ROOTDIR)/tools/utils/set-mote-id $(PROJ).srec $(PROJ).srec.out.$(ADDRESS) $(ADDRESS)
+ifneq ($(PROG),jtag)
+# Can enable watchdog in software, but don't foce fuses.
+	$(INSTALLER) --wr_fuse_e=0xff
+	sleep 2
+	$(INSTALLER) --wr_fuse_h=0x9f
+	sleep 2
+	$(INSTALLER) --wr_fuse_l=0xbf
+	sleep 2
+	$(INSTALLER) --erase
+	sleep 2
+	$(INSTALLER) --upload if=$(PROJ).srec.out.$(ADDRESS)
+ifndef NO_VERIFY
+	sleep 2
+	$(INSTALLER) --verify if=$(PROJ).srec.out.$(ADDRESS)
+endif
+	rm -f $(PROJ).srec.out.$(ADDRESS)
+else
+	$(INSTALLER) --jtag $(PORT) --write-fuses ff9fbf
+	$(INSTALLER) --erase --program --jtag $(PORT) --file $(PROJ).srec.out.$(ADDRESS)
+ifndef NO_VERIFY
+	$(INSTALLER) --verify --jtag $(PORT) --file $(PROJ).srec.out.$(ADDRESS) && rm -f $(PROJ).srec.out.$(ADDRESS)
+endif
+endif
+

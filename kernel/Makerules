@@ -1,0 +1,113 @@
+# -*-Makefile-*-
+#
+# Generel Makerules for all builds
+#
+
+VPATH += $(ROOTDIR)/kernel
+#VPATH += $(ROOTDIR)/modules
+
+INCDIR += -I$(ROOTDIR)/kernel/include
+#INCDIR += -I$(ROOTDIR)/extensions
+#INCDIR += -I$(ROOTDIR)/extensions/include
+#INCDIR += -I$(ROOTDIR)/modules
+#INCDIR += -I$(ROOTDIR)/modules/include
+#INCDIR += -I$(ROOTDIR)/modules/interfaces
+#INCDIR += -I$(ROOTDIR)/drivers/include
+#INCDIR += -I$(ROOTDIR)/drivers/i2c/include
+
+SRCS += sched.c timer.c
+
+
+# platform must be specified first
+include $(ROOTDIR)/platform/$(PLATFORM)/Makerules
+
+#DEFS += -D'DEBUG(arg...)='
+#DEFS += -D'DEBUG_SHORT(arg...)='
+
+CFLAGS += $(MCUFLAG) -Werror -Wall $(DEFS)
+
+LDFLAGS += $(MCUFLAG)
+
+SFLAGS += $(MCUFLAG)
+
+CC  = $(TRG)gcc
+
+AS     = $(TRG)gcc 
+
+OBJCOPY = $(TRG)objcopy
+
+OBJDUMP = $(TRG)objdump
+
+SIZE = $(TRG)size 
+
+HOST = $(shell uname -s)
+
+
+build_info:
+	@echo ""
+	@echo "PROJ = $(PROJ)"
+	@echo "PLATFORM = $(PLATFORM)"
+	@echo "PROCESSOR = $(PROCESSOR)"
+	@echo "SB = $(SB)"
+	@echo ""
+	@echo "SRCS = $(SRCS)"
+	@echo ""
+	@echo "OBJS = $(OBJS)"
+	@echo ""
+	@echo "VPATH = $(VPATH)"
+	@echo ""
+	@echo "INCDIR = $(INCDIR)"
+	@echo ""
+	@echo "CFLAGS = $(CFLAGS)"
+	@echo ""
+
+%.i : %.c
+	$(CC) -E $(CFLAGS) $(INCDIR) $< -o $@
+
+%.s : %.c
+	$(CC) -c $(CFLAGS) $(INCDIR) $< -o $@
+
+%.o : %.c
+	$(CC) -c $(CFLAGS) $(INCDIR) $< -o $@
+
+%.o : %.s
+	$(AS) -c $(INCDIR) $(SFLAGS) $<
+
+%.o : %.S
+	$(AS) -c $(SFLAGS) $(INCDIR) $< -o $@
+
+%.elf: $(OBJS)
+	$(CC) $(OBJS) $(LIBS) $(LDFLAGS) -o $@
+	$(SIZE) -A $@
+
+%.elf.lst: %.elf
+	$(OBJDUMP) -h -S $< > $@
+
+%.srec : %.elf
+	$(OBJCOPY) -j .text -O srec -R .eeprom $< $@
+
+%.hex : %.elf
+	$(OBJCOPY) -j .text -O ihex -R .eeprom $< $@
+
+%.cof : %.elf
+	$(OBJCOPY) --debugging -O coff-ext-avr \
+	--change-section-address .data-0x800000 \
+	--change-section-address .bss-0x800000 \
+	--change-section-address .noinit-0x800000 \
+	--change-section-address .eeprom-0x810000 \
+	$< $@
+
+%.od: %.elf
+	$(OBJDUMP) -zhD $< > $@
+
+#%.srec.out.$(ADDRESS): %.srec
+#	$(ROOTDIR)/tools/utils/set-mote-id $< $@ 0x$(ADDRESS)
+
+#%.sos : %.elf
+#	$(OBJCOPY) -j .text -O binary -R .eeprom $< $@
+#	$(ROOTDIR)/tools/utils/verify_module_header.pl $@
+
+
+%.exe: $(OBJS)
+	$(CC) $(OBJS) $(LIBS) $(LDFLAGS) -o $@
+

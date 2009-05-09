@@ -1,0 +1,106 @@
+# -*-Makefile-*-
+# Makerules for Kernel and Module image for MicaZ platform
+#
+
+#DEFS += -DMICAZ_PLATFORM -DNO_SOS_I2C
+
+DEFS += -DMICAZ_PLATFORM
+
+# if the node is being compiled to be used with cyclops, 
+# then its I2C drivers should also be enabled
+ifndef USE_SOS_I2C
+DEFS += -DNO_SOS_I2C
+endif
+
+# set the radio channel for the CC2420. Must be between 11 and 26.
+ifdef RADIO_CHANNEL
+DEFS += -DRADIO_CHANNEL=$(RADIO_CHANNEL)
+endif
+
+PROCESSOR = avr
+
+VPATH += $(ROOTDIR)/platform/$(PLATFORM)
+VPATH += $(ROOTDIR)/drivers/uart
+VPATH += $(ROOTDIR)/drivers/i2c
+VPATH += $(ROOTDIR)/drivers/cc2420
+
+INCDIR += -I$(ROOTDIR)/platform/$(PLATFORM)/include
+INCDIR += -I$(ROOTDIR)/drivers/uart/include
+INCDIR += -I$(ROOTDIR)/drivers/i2c/include
+INCDIR += -I$(ROOTDIR)/drivers/cc2420/include
+
+ifeq ($(BUILD),_SOS_KERNEL_)
+#SRCS_FIRST += cc2420_radio.c
+SRCS_FIRST += cc2420_hal.c vhal.c vmac.c
+SRCS += led.c sos_uart.c sos_uart_mgr.c sos_i2c.c sos_i2c_mgr.c exflash.c
+#OBJS_FIRST += $(ROOTDIR)/platform/micaz/cc2420_mac.avr.a
+endif
+
+include $(ROOTDIR)/processor/$(PROCESSOR)/Makerules
+
+ifneq ($(UISP),)
+UISP_PROG = $(UISP)
+else 
+UISP_PROG = uisp
+endif
+
+
+####
+# Programer configuration
+#   dapa  | mib510 | stk500 | avarice | vorata (not yet supported)
+#   specify PORT if you want serial programming
+#   specify IP address if you are using ethernet programming
+####
+ifndef PROG
+PROG=dapa
+endif
+INSTALLER_PORG = -dprog=$(PROG)
+
+# TODO: fix this to handle alternative parallel ports
+#PORT=
+ifneq ($(PORT),)
+INSTALLER_PORT = -dserial=$(PORT)
+endif
+
+#IP=
+ifneq ($(IP),)
+INSTALLER_PORT = -dhost=$(IP)
+endif
+
+INSTALLER_PART = -dpart=$(MCU)
+
+ifeq ($(PROG),jtag)
+INSTALLER = avarice 
+else
+INSTALLER = $(UISP_PROG) $(INSTALLER_PART) $(INSTALLER_PORG) $(INSTALLER_PORT)
+endif
+
+
+#######
+# Make rules
+#######
+
+micaz_install: $(PROJ).srec
+	$(ROOTDIR)/tools/utils/set-mote-id $(PROJ).srec $(PROJ).srec.out.$(ADDRESS) $(ADDRESS)
+ifneq ($(PROG),jtag)
+# Disable watchdog for Micaz
+	$(INSTALLER) --wr_fuse_e=0xff
+	sleep 2
+	$(INSTALLER) --wr_fuse_h=0x9f
+	sleep 2
+	$(INSTALLER) --wr_fuse_l=0xbf
+	sleep 2
+	$(INSTALLER) --erase
+	sleep 2
+	$(INSTALLER) --upload if=$(PROJ).srec.out.$(ADDRESS)
+ifndef NO_VERIFY
+	sleep 2
+	$(INSTALLER) --verify if=$(PROJ).srec.out.$(ADDRESS)
+endif
+	rm -f $(PROJ).srec.out.$(ADDRESS)
+else
+	$(INSTALLER) --jtag $(PORT) --write-fuses ff9fbf
+	$(INSTALLER) --erase --program --jtag $(PORT) --file $(PROJ).srec.out.$(ADDRESS)
+	$(INSTALLER) --verify --jtag $(PORT) --file $(PROJ).srec.out.$(ADDRESS) && rm -f $(PROJ).srec.out.$(ADDRESS)
+endif
+

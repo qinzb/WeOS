@@ -1,0 +1,63 @@
+# -*-Makefile-*-
+#
+# Makerules for Kernel and Module image for MSP430 processor
+#
+
+TRG = msp430-
+
+DEFS += -DMSP430_MCU -DLLITTLE_ENDIAN -DNO_PID_PROC 
+#-DSUPPORTS_PACKED
+
+MCU = msp430x1611
+
+MCUFLAG += -mmcu=$(MCU)
+
+# we will use msp43_libc
+INCDIR += -I$(SOSMSPTOOLDIR)/msp430/include
+INCDIR += -I$(SOSMSPTOOLDIR)/msp430/include/sys
+
+VPATH += $(ROOTDIR)/processor/$(PROCESSOR)
+
+#INCDIR += -I$(ROOTDIR)/drivers/uart/include
+INCDIR += -I$(ROOTDIR)/processor/$(PROCESSOR)/include
+
+##############################################################
+# Define the sys jump table location
+SYS_JUMP_TBL_ADDR = 0x4000
+DEFS += -DSYS_JUMP_TBL_START=$(SYS_JUMP_TBL_ADDR)
+DEFS += -DSYS_JUMP_TBL_SIZE=4
+
+ifeq ($(BUILD),_SOS_KERNEL_)
+SRCS += flash_api.c uart_hal.c uart.c uart_system.c timer.c systime.c clock_hal.c  spi_hal.c
+
+CFLAGS += -Os -Wa,-adhlmsn=$(notdir $(<:.c=.lst))
+#CFLAGS += -Os -fshort-enums -fpack-struct -Wno-cast-qual -Wall -Wa,-adhlmsn=$(notdir $(<:.c=.lst))
+SFLAGS += -Wa,$(MCUFLAG),-gstabs,-ahlms=$(notdir $(<:.S=.lst))
+LDFLAGS += -Wl,-Map=$(PROJ).map,--cref -Wl,-T $(ROOTDIR)/processor/msp430/sos_msp430x1611.x
+
+DEFS += -DMINIELF_LOADER
+SRCS += melfloader.c minielfendian.c
+VPATH += $(ROOTDIR)/tools/elfloader/minielf
+VPATH += $(ROOTDIR)/tools/elfloader/soslib
+INCDIR += -I$(ROOTDIR)/tools/elfloader/soslib
+INCDIR += -I$(ROOTDIR)/tools/elfloader/minielf
+
+SRCS += msp430_melfloader.c
+ASMSRCS += sos_fnptr_call.S
+ASMSRCS += sys_jmptable.S
+#LDFLAGS +=  -Wl,--section-start=.sos_sysjmptbl=$(SYS_JUMP_TBL_ADDR)
+	
+
+endif
+
+ifeq ($(BUILD),_MODULE_)
+CFLAGS += -Os -Wall -Wa,-adhlmsn=$(notdir $(<:.c=.lst)) -r
+
+LDFLAGS += -Wl,-Map=$(PROJ).map,--cref -Wl,-T $(ROOTDIR)/processor/msp430/mod.x -Wl,-r,-i -Wl,--unresolved-symbols=ignore-in-object-files -nostartfiles -nodefaultlibs -nostdlib -lgcc -lc
+
+SFLAGS += $(STACK_START) -Wa,$(MCUFLAG),-gstabs,-ahlms=$(notdir $(<:.S=.lst))
+
+endif
+
+msp430: $(PROJ).elf $(PROJ).elf.lst $(OBJS)
+

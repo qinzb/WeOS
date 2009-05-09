@@ -1,0 +1,110 @@
+# -*-Makefile-*-
+#===============================================================================================
+# Makerules for Kernel and Module. Target Processor: AVR
+#===============================================================================================
+###############################################################
+# PROCESSOR SPECIFIC CONFIGURATION
+###############################################################
+TRG = avr-
+DEFS += -DAVR_MCU -DLLITTLE_ENDIAN -DSUPPORTS_PACKED
+MCU = atmega128
+MCUFLAG += -mmcu=$(MCU)
+
+VPATH += $(ROOTDIR)/arch/$(PROCESSOR)
+
+INCDIR += -I$(ROOTDIR)/arch/$(PROCESSOR)/include
+#INCDIR += -I$(ROOTDIR)/drivers/adc/include
+
+###############################################################
+# DEBUG OPTIONS
+###############################################################
+ifeq ($(CC_DEBUG),)
+  CC_DEBUG=-g
+endif
+ifeq ($(AS_DEBUG),)
+  AS_DEBUG=-Wa,-gstabs
+endif
+#CC_DEBUG=-gstabs
+#AS_DEBUG=--gstabs
+#CC_DEBUG = -gstabs+
+#AS_DEBUG = --gstabs+
+#CC_DEBUG = -gdwarf-2 -feliminate-dwarf2-dup
+#AS_DEBUG = --gdwarf2
+
+##############################################################
+#  SYSTEM JUMPTABLE SETUP
+##############################################################
+#SYS_JUMP_TBL_ADDR = 0x8c
+#DEFS += -DSYS_JUMP_TBL_START=$(SYS_JUMP_TBL_ADDR)
+#DEFS += -DSYS_JUMP_TBL_SIZE=4
+
+#===============================================================================================
+# KERNEL BUILD OPTIONS
+#===============================================================================================
+#ifeq ($(BUILD),_SOS_KERNEL_)
+#BLS_START = -Wl,--section-start=.sos_bls=0x1fc00 
+#SRCS += adc_proc_hw.c adc_proc.c i2c.c i2c_system.c uart_hal.c uart.c uart_system.c flash_api.c crc.c systime.c timer.c
+#ASMSRCS += sos_fnptr_call.S
+#ASMSRCS += sys_jmptable.S
+#LDFLAGS +=  -Wl,--section-start=.sos_sysjmptbl=$(SYS_JUMP_TBL_ADDR)
+SRCS += hardware_timer.c usart.c os_cpu.c
+
+#DEFS += -DMINIELF_LOADER
+#SRCS += avr_melfloader.c melfloader.c minielfendian.c
+#VPATH += $(ROOTDIR)/tools/elfloader/minielf
+#VPATH += $(ROOTDIR)/tools/elfloader/soslib
+#INCDIR += -I$(ROOTDIR)/tools/elfloader/soslib
+#INCDIR += -I$(ROOTDIR)/tools/elfloader/minielf
+
+###############################################################
+# MEMORY PROTECTION OPTIONS
+###############################################################
+#ifeq ($(MODE), sfi)
+#SRCS += memmap_checker_const.c sfi_jumptable.c
+#SRCS += memmap_checker_proc.c 
+#ASMSRCS += memmap_checker_proc_asm.S cross_domain_cf_asm.S sfi_jumptable_proc.S
+#CFLAGS += -ffixed-r2 -ffixed-r3 -ffixed-r4
+#-fnew-ra
+#LDSCRIPT = -Wl,-T $(ROOTDIR)/arch/avr/sos_sfi_avr5.x
+#SFIJMPTBL_START = -Wl,--section-start=.sfijmptbl=0x1D600
+#else
+#LDSCRIPT = -Wl,-T $(ROOTDIR)/arch/avr/sos_avr5.x
+#endif
+
+#OBJS += flash.o
+
+#CFLAGS += -Os $(CC_DEBUG) -fshort-enums -fpack-struct -Wno-cast-qual -Wall -Wa,-adhlmsn=$(notdir $(<:.c=.lst))
+#SFLAGS += -Wa,$(MCUFLAG),$(AS_DEBUG),-ahlms=$(notdir $(<:.S=.lst)) $(DEFS)
+#LDFLAGS += -Wl,-Map=$(PROJ).map,--cref $(SFIJMPTBL_START) $(BLS_START) $(LDSCRIPT)
+#endif # _SOS_KERNEL_
+
+
+#===============================================================================================
+# MODULE OPTIONS
+#===============================================================================================
+#ifeq ($(BUILD),_MODULE_)
+
+#CFLAGS += -Os -fno-unit-at-a-time -fshort-enums -fpack-struct -mno-tablejump -Wall -Wa,-adhlmsn=$(notdir $(<:.c=.lst)) -Wa,-mno-wrap 
+#LDFLAGS += -Wl,-r,-i,--unresolved-symbols=ignore-in-object-files 
+
+###############################################################
+# MEMORY PROTECTION OPTIONS
+###############################################################
+#ifeq ($(MODE),sfi)
+#CFLAGS += -ffixed-r2 -ffixed-r3 -ffixed-r4
+#endif
+
+#LDFLAGS += -Wl,-T $(ROOTDIR)/arch/avr/mod.x -Wl,-Map=$(PROJ).map,--cref -nostartfiles -nodefaultlibs -nostdlib -lgcc -lc
+#SFLAGS += $(STACK_START) -Wa,$(MCUFLAG),$(AS_DEBUG),-ahlms=$(notdir $(<:.S=.lst))
+#endif # _MODULE_
+
+
+#sfi_jumptable_proc.S:
+#	$(ROOTDIR)/arch/avr/create_sfijumptable.py $(ROOTDIR)/kernel/include/kertable.h $(ROOTDIR)/arch/avr/include/kertable_proc.h $(ROOTDIR)/platform/$(PLATFORM)/include/kertable_plat.h
+
+avr: $(PROJ).elf $(PROJ).elf.lst $(PROJ).srec $(OBJS) 
+
+#ifeq ($(BUILD),_SOS_KERNEL_)
+#	$(ROOTDIR)/tools/utils/verify_avr_image.pl $(PROJ).elf 
+#endif
+

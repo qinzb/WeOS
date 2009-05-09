@@ -1,0 +1,145 @@
+# -*-Makefile-*-
+#
+# Generel Makerules for Module image
+#
+
+##################################################
+# Only allow the module to be built for hardware that suports it.  A faild
+# build will result in the "invalid" target
+#################################################
+ifndef SUPPORTLIST
+SUPPORTLIST = mica2 micaz 
+endif
+
+UTILLIST = all install install2 setup check clean
+
+WHITELIST += $(UTILLIST)
+WHITELIST += $(SUPPORTLIST)
+
+ifndef PLATFORM
+    ifeq ($(MAKECMDGOALS),)
+        FILTER = $(filter $(WHITELIST), mica2)
+        PLATFORM = mica2
+    else
+        FILTER = $(filter $(WHITELIST), $(MAKECMDGOALS))
+        PLATFORM = $(filter $(SUPPORTLIST), $(MAKECMDGOALS))
+    endif
+else
+    FILTER = $(filter $(WHITELIST), $(PLATFORM))
+    PLATFORM = $(filter $(SUPPORTLIST), $(MAKECMDGOALS))
+endif
+
+ifeq ($(FILTER),)
+$(error Invalid platform.  Please try "make [$(WHITELIST)]")
+endif
+
+
+
+##################################################
+# Misc. module options
+#################################################
+
+ifndef QUIET
+QUIET = 0
+endif
+
+#BUILD = _MODULE_
+
+#DEFS += -D_MODULE_ 
+#
+SRCS += $(PROJ).c  
+
+##################################################
+# MEMORY PROTECTION
+#################################################
+#ifeq ($(MODE), safe)
+#DEFS += -DFAULT_TOLERANT_SOS
+#endif
+
+#ifeq ($(MODE), sfi)
+#DEFS += -DSOS_SFI
+#endif
+
+#ifeq ($(MODE), sfi)
+#SFIDEPS += $(PROJ).sbx $(PROJ).sbx.lst
+#MELFDEPS += $(PROJ).sbx.mlf
+#else
+#ifeq ($(PLATFORM), sim) 
+##else
+#MELFDEPS += $(PROJ).sos $(PROJ).mlf
+#endif
+#endif
+
+#################################################
+# MINI-ELF LOADER
+#################################################
+#MELFDEPS += $(PROJ).mlf
+
+#################################################
+
+#################################################
+# VIRTUAL MACHINE 
+#################################################
+#ifeq ($(VM_EXT),true)
+#DEFS += -DVM_EXTENSION_ENABLE
+#endif
+#
+
+OBJS += $(SRCS:.c=.o)
+
+ifneq ($(PLATFORM),)
+include $(ROOTDIR)/kernel/Makerules
+endif
+
+CFLAGS += -Wno-unused-variable
+####
+# Make rules
+####
+
+#$(PLATFORM): $(PROCESSOR) $(PROJ).i $(SFIDEPS) $(MELFDEPS)
+$(PLATFORM): $(PROCESSOR)
+
+#%.sfi.c : %.i
+#	cilly.asm.exe --out $@ --keepunused --domotesfi $< 
+
+#%.mlf : %.elf
+#	$(ROOTDIR)/tools/elfloader/utils/elftomini/elftomini.exe -o $@ $<
+
+#%.sbx : %.elf
+#	$(ROOTDIR)/tools/harbor/app/avrsandbox/avrsandbox.exe -f $< -o $@
+
+#%.sbx.lst: %.sbx
+#	$(OBJDUMP) -h -S $< > $@
+
+#%.sbx.mlf : %.sbx
+#	$(ROOTDIR)/tools/elfloader/utils/elftomini/elftomini.exe -o $@ $<
+
+all:
+	@echo "make [$(SUPPORTLIST)]"
+
+install: $(PROJ).mlf 
+	cp $< $(ROOTDIR)/modules/build/
+
+install2: $(PROJ).sos
+	cp $< $(ROOTDIR)/modules/build/
+
+installmelf: $(PROJ).mlf
+	cp $< $(ROOTDIR)/modules/build/
+
+installsbx: $(PROJ).sbx.mlf
+	cp $< $(ROOTDIR)/modules/build/
+
+setup:
+	$(INSTALLER) --wr_fuse_l=0xff
+	sleep 2
+	$(INSTALLER) --wr_fuse_h=0x9f
+	sleep 2
+	$(INSTALLER) --wr_fuse_e=0xfe
+
+check: $(PROJ).i
+	@$(ROOTDIR)/tools/verify/check $(PROJ).i $(ROOTDIR) $(QUIET)
+
+clean:
+	rm -f *.sos *.o *.s *.srec *.elf *.lst $(PROJ).map $(PROJ).exe $(PROJ).cil.c \
+        $(PROJ).i $(PROJ).main.i *.i.check $(PROJ).sfi.c *.mlf $(PROJ).sbx $(PROJ).od $(PROJ).hex
+
